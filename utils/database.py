@@ -12,7 +12,6 @@ class DataBase:
     def __init__(self, bot):
         self.bot = bot
         mongo_uri = os.getenv("MONGO_URI")
-        if not mongo_uri: raise RuntimeError("MONGO_URI is not set in .env")
         self.client = AsyncIOMotorClient(mongo_uri, server_api=ServerApi("1"))
         self.db = self.client["stella"]
         self.payments = self.db["payments"]
