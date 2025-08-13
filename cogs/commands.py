@@ -10,14 +10,11 @@ from discord.ui import Button, View
 from discord import app_commands
 from discord.ext import commands
 from datetime import datetime
-from utils.utils import vndformat
+from utils.utils import vndformat, EmbedX
 from utils.views import PaginatedView
 from utils.views_callback import build_payment  
 
 roles = [1195351303182889031, 1204404049210769418, 1280481283713273969, 894579088843485244, 1275479502050426901]
-
-def EmbedX(title: str, desc: str = "", color: int | discord.Color = discord.Color.blurple()) -> discord.Embed:
-    return discord.Embed(title=title, description=desc, color=color, timestamp=discord.utils.utcnow())
 
 @dataclass
 class PaymentRecord:
