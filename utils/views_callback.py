@@ -28,7 +28,7 @@ async def build_payment(inuser: int, payer: discord.User, amount: int, bot: comm
     pay = bot.payos.createPaymentLink(paymentData=PaymentData(
         orderCode=ordercode,
         amount=amount,
-        expiredAt=int((datetime.now(pytz.timezone('Asia/Ho_Chi_Minh')) + timedelta(seconds=30)).astimezone(timezone.utc).timestamp()),  # PayOS nhận unix (giây)
+        expiredAt=int((datetime.now(pytz.timezone('Asia/Ho_Chi_Minh')) + timedelta(seconds=30)).astimezone(timezone.utc).timestamp()),
         description=description,
         returnUrl="https://stellamc.net/",
         cancelUrl="https://stellamc.net/",
