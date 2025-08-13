@@ -19,7 +19,6 @@ class Bot(commands.Bot):
         self.logger = logging.getLogger("discord.client")
         self.guild_id = 1275475899818442866
         self.log_channel = 1384716948939735084
-
         self.db = DataBase(self)
         self.payos = PayOS(client_id=os.getenv("PAYOS_CLIENT_ID"), api_key=os.getenv("PAYOS_API_KEY"), checksum_key=os.getenv("PAYOS_CHECKSUM_KEY"))
 

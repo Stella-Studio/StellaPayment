@@ -22,8 +22,7 @@ class EmptyView(View):
         super().__init__(timeout=None)
 
 async def build_payment(inuser: int, payer: discord.User, amount: int, bot: commands.Bot, channel: discord.abc.Messageable) -> BuiltPayment:
-    payload = f"{inuser} {payer.id} {getattr(channel, 'id', 0)}"
-    description = requests.post("https://api.pastes.dev/post", data=payload.encode("utf-8"), headers={"Content-Type": "text/plain"}).json().get("key")
+    description = requests.post("https://api.pastes.dev/post", data=f"{inuser} {payer.id} {getattr(channel, 'id', 0)}".encode("utf-8"), headers={"Content-Type": "text/plain"}).json().get("key")
     ordercode = random.randint(1000, 999_999)
     pay = bot.payos.createPaymentLink(paymentData=PaymentData(
         orderCode=ordercode,
@@ -53,10 +52,4 @@ async def build_payment(inuser: int, payer: discord.User, amount: int, bot: comm
     embed.set_footer(text="Cảm ơn bạn đã sử dụng dịch vụ", icon_url="https://qu.ax/yhuTd.png")
     embed.set_author(name=payer.name, icon_url=payer.display_avatar.url)
 
-    return BuiltPayment(
-        description=description,
-        ordercode=ordercode,
-        expiresat=pay.expiredAt,
-        embed=embed,
-        view=EmptyView()
-    )
+    return BuiltPayment(description=description, ordercode=ordercode, expiresat=pay.expiredAt, embed=embed, view=EmptyView())

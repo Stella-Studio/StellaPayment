@@ -1,4 +1,3 @@
-# view.py
 import discord
 from typing import List
 from discord.ui import Button, View

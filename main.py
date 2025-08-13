@@ -18,8 +18,7 @@ bot.guild_id = getattr(bot, "guild_id", None)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     bot.logger.info("Starting application...")
-    token = os.getenv("DISCORD_TOKEN")
-    asyncio.create_task(bot.start(token))
+    asyncio.create_task(bot.start(os.getenv("DISCORD_TOKEN")))
     yield
     bot.logger.info("Shutting down...")
     await bot.close()
