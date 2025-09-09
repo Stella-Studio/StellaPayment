@@ -4,6 +4,7 @@ import time
 import discord
 import psutil
 import requests
+import io
 from dataclasses import dataclass
 from typing import Optional
 from discord.ui import Button, View
@@ -12,7 +13,7 @@ from discord.ext import commands
 from datetime import datetime
 from utils.utils import vndformat, EmbedX
 from utils.views import PaginatedView
-from utils.views_callback import build_payment  
+from utils.views_callback import build_payment
 
 roles = [1195351303182889031, 1204404049210769418, 1280481283713273969, 894579088843485244, 1275479502050426901]
 
@@ -44,16 +45,16 @@ class BotCommands(commands.Cog):
             return False
         return True
 
-    @app_commands.command(name="payment", description="Định dạng <user> <số tiền>")
-    @app_commands.describe(user="Vui lòng chọn khách hàng", amount="Định dạng tiền VNĐ")
-    async def payment(self, interaction: discord.Interaction, user: discord.User, amount: int):
+    @app_commands.command(name="payment", description="Định dạng <user> <số tiền> [ghi chú]")
+    @app_commands.describe(user="Vui lòng chọn khách hàng", amount="Định dạng tiền VNĐ", note="Ghi chú ngắn sẽ hiển thị trong hoá đơn")
+    async def payment(self, interaction: discord.Interaction, user: discord.User, amount: int, note: Optional[str] = None):
         await interaction.response.defer(ephemeral=True)
         if not await self.hasperm(interaction): return
         if amount < 2000:
             await interaction.followup.send(embed=EmbedX("❌ Số tiền tối thiểu là 2,000 VND", color=discord.Color.red()), ephemeral=True)
             return
 
-        pay = await build_payment(inuser=interaction.user.id, payer=user, amount=amount, bot=self.bot, channel=interaction.channel)
+        pay = await build_payment(inuser=interaction.user.id, payer=user, amount=amount, bot=self.bot, channel=interaction.channel, note=note)
         sent: discord.Message = await interaction.channel.send(embed=pay.embed, view=pay.view)
         record = PaymentRecord(pay.description, pay.ordercode, amount, interaction.user.id, user.id, sent.channel.id, sent.id, pay.expiresat)
         self.bot.pending_payments[pay.description] = record
@@ -110,7 +111,7 @@ class BotCommands(commands.Cog):
                 await msg.delete()
             except: pass
         if desc_key:
-            self.bot.pending_payments.pop(desc_key, None)  
+            self.bot.pending_payments.pop(desc_key, None)
 
         await interaction.followup.send(embed=EmbedX("✅ Đã huỷ hóa đơn", f"Mã đơn: `{record.order_code}` cho <@{record.payer_id}> đã được huỷ thành công.", discord.Color.green()), ephemeral=True)
 
@@ -140,6 +141,105 @@ class BotCommands(commands.Cog):
             lines.append(f"**#{idx}** {member.mention if member else f"<@{uid}>"}\n> :bust_in_silhouette: `{member.display_name if member else cached.name if cached else f"ID: {uid}"}` `<{uid}>`\n> :coin: `{vndformat(total)}`\n")
 
         await PaginatedView(lines, 5, ":notepad_spiral: Danh sách khách hàng").send_message(interaction)
+
+    @app_commands.command(name="top", description="Top đóng góp theo khoảng thời gian")
+    @app_commands.describe(period="ngày | tuần | tháng", limit="Số lượng hiển thị (5-10)")
+    async def top(self, interaction: discord.Interaction, period: str, limit: Optional[int] = 5):
+        if not await self.hasperm(interaction): return
+        await interaction.response.defer()
+        lim = max(1, min(int(limit or 5), 10))
+        docs = await self.bot.db.top_donors(period, lim)
+        if not docs:
+            return await interaction.followup.send(embed=EmbedX(":x: Không có dữ liệu", "Chưa có giao dịch trong khoảng thời gian này.", discord.Color.orange()))
+        guild = interaction.guild
+        medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+        lines = []
+        for idx, d in enumerate(docs, start=1):
+            uid, total = int(d["_id"]), int(d.get("total_amount", 0))
+            member, cached = guild.get_member(uid) if guild else None, self.bot.get_user(uid)
+            prefix = medals.get(idx, f"#{idx}")
+            lines.append(f"{prefix} {member.mention if member else f"<@{uid}>"} — `{vndformat(total)}`")
+        await interaction.followup.send(embed=EmbedX(f"📊 Top {lim} — {period}", "\n".join(lines), discord.Color.blue()))
+
+    @app_commands.command(name="history", description="Lịch sử giao dịch của bạn theo khoảng thời gian")
+    @app_commands.describe(period="ngày | tuần | tháng")
+    async def history(self, interaction: discord.Interaction, period: str):
+        if not await self.hasperm(interaction): return
+        await interaction.response.defer(ephemeral=True)
+        total, records = await self.bot.db.user_history(interaction.user.id, period)
+        if not records:
+            return await interaction.followup.send(embed=EmbedX(":x: Không có giao dịch", "Bạn chưa có giao dịch trong khoảng thời gian này.", discord.Color.orange()), ephemeral=True)
+        lines = []
+        for r in records[:20]:
+            ts = r.get("timestamp")
+            ts_unix = int(ts.timestamp()) if hasattr(ts, "timestamp") else 0
+            amt = int(r.get("amount", 0))
+            lines.append(f"• `{vndformat(amt)}` — <t:{ts_unix}:f>")
+        desc = f"Tổng: `{vndformat(total)}`\n\n" + "\n".join(lines)
+        await interaction.followup.send(embed=EmbedX("🧾 Lịch sử giao dịch", desc, discord.Color.blurple()), ephemeral=True)
+
+    @app_commands.command(name="myrank", description="Xem thứ hạng donate tháng này")
+    async def myrank(self, interaction: discord.Interaction):
+        if not await self.hasperm(interaction): return
+        rank, total, population = await self.bot.db.rank_in_month(interaction.user.id)
+        if not rank:
+            return await interaction.response.send_message(embed=EmbedX("🏅 Xếp hạng","Bạn chưa có đóng góp trong tháng này.",discord.Color.orange()), ephemeral=True)
+        await interaction.response.send_message(embed=EmbedX("🏅 Xếp hạng", f"Bạn đang đứng hạng **#{rank}/{population}** với tổng `{vndformat(total)}`", discord.Color.gold()), ephemeral=True)
+
+    @app_commands.command(name="daily", description="Thống kê donate hôm nay")
+    async def daily(self, interaction: discord.Interaction):
+        if not await self.hasperm(interaction): return
+        total, count = await self.bot.db.server_totals("day")
+        await interaction.response.send_message(embed=EmbedX("📈 Hôm nay", f"Giao dịch: `{count}`\nTổng: `{vndformat(total)}`", discord.Color.green()))
+
+    @app_commands.command(name="serverstats", description="Tổng doanh thu hôm nay/tuần/tháng")
+    @app_commands.describe(period="ngày | tuần | tháng")
+    async def serverstats(self, interaction: discord.Interaction, period: str):
+        if not await self.hasperm(interaction): return
+        total, count = await self.bot.db.server_totals(period)
+        await interaction.response.send_message(embed=EmbedX("🏦 Doanh thu", f"Kỳ: `{period}`\nGiao dịch: `{count}`\nTổng: `{vndformat(total)}`", discord.Color.purple()))
+
+    @app_commands.command(name="compare", description="So sánh donate giữa bạn và người khác")
+    @app_commands.describe(user="Người để so sánh", period="ngày | tuần | tháng")
+    async def compare(self, interaction: discord.Interaction, user: discord.User, period: str):
+        if not await self.hasperm(interaction): return
+        a, b = await self.bot.db.compare_users(interaction.user.id, user.id, period)
+        more = interaction.user if a >= b else user
+        await interaction.response.send_message(embed=EmbedX("⚖️ So sánh", f"{interaction.user.mention}: `{vndformat(a)}`\n{user.mention}: `{vndformat(b)}`\n\nNgười đóng góp nhiều hơn: **{more.mention}**", discord.Color.teal()))
+
+    @app_commands.command(name="resetstats", description="[Admin] Reset thống kê theo khoảng thời gian")
+    @app_commands.describe(period="ngày | tuần | tháng")
+    async def resetstats(self, interaction: discord.Interaction, period: str):
+        if not await self.hasperm(interaction): return
+        await interaction.response.defer(ephemeral=True)
+        deleted = await self.bot.db.reset_stats(period)
+        await interaction.followup.send(embed=EmbedX("🧹 Đã reset", f"Đã xoá `{deleted}` giao dịch trong kỳ `{period}`.", discord.Color.red()), ephemeral=True)
+
+    @app_commands.command(name="check", description="[Admin] Xem tổng và lịch sử của một user")
+    @app_commands.describe(user="Người dùng cần kiểm tra")
+    async def check(self, interaction: discord.Interaction, user: discord.User):
+        if not await self.hasperm(interaction): return
+        await interaction.response.defer(ephemeral=True)
+        total, count, recent = await self.bot.db.check_user(user.id)
+        if not count:
+            return await interaction.followup.send(embed=EmbedX(":x: Không có dữ liệu", f"{user.mention} chưa có giao dịch.", discord.Color.orange()), ephemeral=True)
+        lines = []
+        for r in recent:
+            ts = r.get("timestamp")
+            ts_unix = int(ts.timestamp()) if hasattr(ts, "timestamp") else 0
+            amt = int(r.get("amount", 0))
+            lines.append(f"• `{vndformat(amt)}` — <t:{ts_unix}:f>")
+        desc = f"Người dùng: {user.mention}\nTổng: `{vndformat(total)}` — Giao dịch: `{count}`\n\n" + "\n".join(lines)
+        await interaction.followup.send(embed=EmbedX("🔎 Kiểm tra người dùng", desc, discord.Color.blurple()), ephemeral=True)
+
+    @app_commands.command(name="export", description="[Admin] Xuất CSV lịch sử giao dịch một tháng")
+    @app_commands.describe(month="Tháng (1-12)", year="Năm (mặc định: năm hiện tại)")
+    async def export(self, interaction: discord.Interaction, month: int, year: Optional[int] = None):
+        if not await self.hasperm(interaction): return
+        await interaction.response.defer(ephemeral=True)
+        filename, content = await self.bot.db.export_month_csv(month, year)
+        buf = io.BytesIO(content.encode('utf-8'))
+        await interaction.followup.send(content="CSV xuất thành công", file=discord.File(buf, filename=filename), ephemeral=True)
 
     @commands.Cog.listener()
     async def on_payos(self, data: dict) -> None:
@@ -189,7 +289,7 @@ class BotCommands(commands.Cog):
                 except Exception:
                     if isinstance(channel, (discord.TextChannel, discord.Thread)): await channel.send(embed=embed)
                 record.paid = True
-                self.bot.pending_payments.pop(desc_key, None)  
+                self.bot.pending_payments.pop(desc_key, None)
             else:
                 if isinstance(channel, (discord.TextChannel, discord.Thread)):
                     await channel.send(embed=embed)
