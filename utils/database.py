@@ -59,7 +59,6 @@ class DataBase:
             self._cache_ts = time.time()
             return self._cache
 
-    # ==== Stats helpers and queries ====
     def _period_start(self, period: str) -> datetime:
         now = datetime.now()
         p = (period or "day").lower()

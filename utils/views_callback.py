@@ -42,8 +42,8 @@ async def build_payment(inuser: int, payer: discord.User, amount: int, bot: comm
         f"> Nội dung thanh toán: `{description}`\n"
         f"> Mã đơn: `{ordercode}`\n"
     )
-    if note:
-        base_desc += f"> Ghi chú: `{note[:120]}`\n"
+
+    if note: base_desc += f"> Ghi chú: `{note[:120]}`\n"
     base_desc += f"\n:hourglass: Vui lòng thanh toán trước **<t:{pay.expiredAt}:T>** (**<t:{pay.expiredAt}:R>**)**\n\n*Author: _karisan_ • Support: Saly*"
 
     embed = discord.Embed(
@@ -52,6 +52,7 @@ async def build_payment(inuser: int, payer: discord.User, amount: int, bot: comm
         color=discord.Color.gold(),
         timestamp=discord.utils.utcnow()
     )
+
     embed.set_image(url=f"https://quickchart.io/qr?text={pay.qrCode.replace(' ', '%20')}&margin=1&size=450&centerImageSizeRatio=0.2&dark=82aafd")
     embed.set_footer(text="Cảm ơn bạn đã sử dụng dịch vụ", icon_url="https://qu.ax/yhuTd.png")
     embed.set_author(name=payer.name, icon_url=payer.display_avatar.url)
