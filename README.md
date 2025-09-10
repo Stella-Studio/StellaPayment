@@ -27,7 +27,7 @@ PAYOS_CHECKSUM_KEY=your_payos_checksum_key
 
 ### Cấu hình Webhook PayOS
 - Kênh thanh toán -> Chọn kênh -> Cài đặt -> Chỉnh sửa thông tin -> Webhook Url: 
-  - http(s)://<domain_or_ip>:<port>/api/payos
+  - http(s)://<ip:port>/api/payos
   - Đảm bảo port được mở hoặc dùng reverse proxy (ngrok, devtunnel, cloudflare tunnel,...).
 
 ### Sử dụng lệnh
@@ -62,4 +62,5 @@ PAYOS_CHECKSUM_KEY=your_payos_checksum_key
 
 ### Tác giả & Đóng góp
 - Tác giả bot Discord: `_karisan_`
+
 - Người hỗ trợ thêm tính năng: `Saly`
