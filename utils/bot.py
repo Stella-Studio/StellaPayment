@@ -3,12 +3,17 @@ import logging
 import asyncio
 import socket
 import os
+
 from dotenv import load_dotenv
 from payos import PayOS
 from datetime import datetime
 from discord.ext import commands
 from utils.database import DataBase
-from cogs.commands import BotCommands
+
+from cogs.payment import PaymentCog
+from cogs.users import UsersCog
+from cogs.stats import StatsCog
+from cogs.admin import AdminCog
 
 load_dotenv()
 
@@ -23,7 +28,7 @@ class Bot(commands.Bot):
         self.payos = PayOS(client_id=os.getenv("PAYOS_CLIENT_ID"), api_key=os.getenv("PAYOS_API_KEY"), checksum_key=os.getenv("PAYOS_CHECKSUM_KEY"))
 
     async def setup_hook(self):
-        await self.add_cog(BotCommands(self))
+        for cog in [PaymentCog, UsersCog, StatsCog, AdminCog]: await self.add_cog(cog(self))
         await self.tree.sync()
     
     async def on_ready(self):
