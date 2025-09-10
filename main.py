@@ -32,4 +32,5 @@ async def payos_callback(request: Request):
     return {"success": True}
 
 if __name__ == "__main__":
+    # Chỉnh port phù hợp với bạn: port=<custom port>
     uvicorn.run(app, host="0.0.0.0", port=19131, loop="asyncio")
